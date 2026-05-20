@@ -108,7 +108,7 @@ git diff base..head         ─┘                                              
 - [x] `golangci-lint run` 無錯誤 — 0 issues（v2.12.2，啟用 errcheck/govet/staticcheck/gosec/revive/ineffassign/unused + gofmt/goimports）
 - [x] GitHub Action 的 `action.yml` 由 `raven-actions/actionlint@v2` 在 CI 驗證
 - [x] README 含安裝、最小可用範例、CI 範例、報告結構、隱私聲明、CLI reference、架構說明
-- [ ] 在 `check_spec` 自己的 repo 上 dogfood：對本 change 跑一次 verify — 待使用者執行 `make build && ./check-spec verify ...`（程序載於 `docs/audits/v0.1-self-audit.md`）
+- [x] 在 `check_spec` 自己的 repo 上 dogfood：commit `36071d0` 對本 change 跑 verify，結果存於 `docs/audits/v0.1-self-audit.md`（Opus 4.7、未截斷 50 files、verdict REQUEST_CHANGES 因 dogfood 與 status flip 兩項仍 pending；本 commit 修正之）
 
 ## 技術假設
 
