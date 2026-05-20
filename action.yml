@@ -1,0 +1,157 @@
+name: 'check-spec audit'
+description: 'Audit Arceus-generated code against its spec.md using an LLM as judge'
+author: 'mikeqoo1'
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  change-id:
+    description: |
+      The .arceus/changes/<id>/ folder to audit. When empty, the action
+      auto-detects the most recently modified change folder in the PR diff.
+    required: false
+    default: ''
+  base-ref:
+    description: 'Base git ref for the diff comparison.'
+    required: false
+    default: ${{ github.event.pull_request.base.sha }}
+  head-ref:
+    description: 'Head git ref for the diff comparison.'
+    required: false
+    default: ${{ github.event.pull_request.head.sha }}
+  model:
+    description: 'LLM model id.'
+    required: false
+    default: 'claude-opus-4-7'
+  max-diff-bytes:
+    description: 'Soft cap on concatenated diff bytes sent to the LLM.'
+    required: false
+    default: '200000'
+  anthropic-api-key:
+    description: 'Anthropic API key. Pass as secret. The action will fail if empty.'
+    required: true
+  check-spec-version:
+    description: 'check-spec release tag to download (e.g. v0.1.0). Defaults to "latest".'
+    required: false
+    default: 'latest'
+  post-comment:
+    description: 'When true and event is pull_request, post a sticky PR comment with the report.'
+    required: false
+    default: 'true'
+  fail-on-findings:
+    description: 'When true, exit non-zero if verdict is not APPROVE or findings exist.'
+    required: false
+    default: 'true'
+
+outputs:
+  verdict:
+    description: 'The audit verdict: APPROVE | REQUEST_CHANGES | NEEDS_DISCUSSION.'
+    value: ${{ steps.run.outputs.verdict }}
+  report-path:
+    description: 'Path to the rendered markdown report in the runner workspace.'
+    value: ${{ steps.run.outputs.report-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.anthropic-api-key }}" ]; then
+          echo "::error::anthropic-api-key input is required (pass via secrets.ANTHROPIC_API_KEY)"
+          exit 2
+        fi
+
+    - name: Resolve release tag
+      id: tag
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if [ "${{ inputs.check-spec-version }}" = "latest" ]; then
+          tag=$(gh release view --repo mikeqoo1/check-spec --json tagName --jq .tagName)
+        else
+          tag="${{ inputs.check-spec-version }}"
+        fi
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+    - name: Download check-spec binary
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        os=linux
+        arch=amd64
+        case "$RUNNER_OS" in
+          macOS) os=darwin ;;
+          Windows) os=windows ;;
+        esac
+        case "$RUNNER_ARCH" in
+          ARM64) arch=arm64 ;;
+        esac
+        asset="check-spec_${os}_${arch}.tar.gz"
+        gh release download "${{ steps.tag.outputs.tag }}" \
+          --repo mikeqoo1/check-spec \
+          --pattern "$asset" \
+          --dir "$RUNNER_TEMP/check-spec"
+        tar -xzf "$RUNNER_TEMP/check-spec/$asset" -C "$RUNNER_TEMP/check-spec"
+        echo "$RUNNER_TEMP/check-spec" >> "$GITHUB_PATH"
+
+    - name: Auto-detect change-id (when input empty)
+      id: detect
+      shell: bash
+      run: |
+        change="${{ inputs.change-id }}"
+        if [ -z "$change" ]; then
+          change=$(git diff --name-only "${{ inputs.base-ref }}" "${{ inputs.head-ref }}" \
+            | awk -F/ '/^\.arceus\/changes\/[^\/]+\//{print $3}' \
+            | grep -v '^archive$' \
+            | sort -u \
+            | tail -n1)
+        fi
+        if [ -z "$change" ]; then
+          echo "::error::Could not auto-detect a change-id from the PR diff. Pass change-id explicitly."
+          exit 2
+        fi
+        echo "change=$change" >> "$GITHUB_OUTPUT"
+        echo "Auditing change: $change"
+
+    - name: Run check-spec verify
+      id: run
+      shell: bash
+      env:
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        set +e
+        report="$RUNNER_TEMP/check-spec-report.md"
+        check-spec verify \
+          --change "${{ steps.detect.outputs.change }}" \
+          --base "${{ inputs.base-ref }}" \
+          --head "${{ inputs.head-ref }}" \
+          --model "${{ inputs.model }}" \
+          --max-diff-bytes "${{ inputs.max-diff-bytes }}" \
+          --output "$report"
+        code=$?
+        echo "report-path=$report" >> "$GITHUB_OUTPUT"
+        verdict=$(grep -m1 '\*\*Verdict\*\*:' "$report" | sed 's/.*Verdict\*\*: //' | tr -d ' ')
+        echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+        echo "exit=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Post sticky PR comment
+      if: ${{ inputs.post-comment == 'true' && github.event_name == 'pull_request' }}
+      uses: marocchino/sticky-pull-request-comment@v2
+      with:
+        header: check-spec-audit
+        path: ${{ steps.run.outputs.report-path }}
+
+    - name: Decide exit
+      shell: bash
+      run: |
+        verdict="${{ steps.run.outputs.verdict }}"
+        exit_code="${{ steps.run.outputs.exit }}"
+        echo "verdict=$verdict exit=$exit_code"
+        if [ "${{ inputs.fail-on-findings }}" = "true" ] && [ "$exit_code" != "0" ]; then
+          echo "::error::check-spec audit reported findings (exit code $exit_code, verdict $verdict)"
+          exit "$exit_code"
+        fi

@@ -1,0 +1,36 @@
+# Example workflow showing how downstream repos should consume the
+# check-spec action. Copy this file into your own repo at
+# .github/workflows/check-spec.yml and replace the action ref with a
+# pinned tag once a v0 release exists.
+name: check-spec audit (example)
+
+on:
+  pull_request:
+    paths:
+      - '.arceus/changes/**'
+      - '**/*.go'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.js'
+      - '**/*.py'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  audit:
+    name: Spec/code consistency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run check-spec
+        uses: mikeqoo1/check-spec@v0
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # change-id is auto-detected from the PR diff when omitted.
+          # change-id: 2026-05-20-some-change
+          model: claude-opus-4-7

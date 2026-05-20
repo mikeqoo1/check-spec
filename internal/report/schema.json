@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mikeqoo1/check-spec/internal/report/schema.json",
+  "title": "check-spec audit report",
+  "description": "Structured output produced by `check-spec verify --format json`.",
+  "type": "object",
+  "required": ["changeId", "changeTitle", "baseRef", "headRef", "baseSHA", "headSHA", "model", "filesAnalyzed", "verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "changeId":      {"type": "string"},
+    "changeTitle":   {"type": "string"},
+    "changeStatus":  {"type": "string"},
+    "baseRef":       {"type": "string"},
+    "headRef":       {"type": "string"},
+    "baseSHA":       {"type": "string"},
+    "headSHA":       {"type": "string"},
+    "model":         {"type": "string"},
+    "filesAnalyzed": {"type": "integer", "minimum": 0},
+    "diffTruncated": {"type": "boolean"},
+    "verdict":       {"type": "string", "enum": ["APPROVE", "REQUEST_CHANGES", "NEEDS_DISCUSSION"]},
+    "summary":       {"type": "string"},
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "text", "reported", "actual"],
+        "additionalProperties": false,
+        "properties": {
+          "index":    {"type": "integer", "minimum": 1},
+          "phase":    {"type": "string"},
+          "text":     {"type": "string"},
+          "reported": {"type": "boolean"},
+          "actual":   {"type": "string", "enum": ["done", "partial", "missing"]},
+          "evidence": {"type": "string"},
+          "notes":    {"type": "string"}
+        }
+      }
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "text", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "index":    {"type": "integer", "minimum": 1},
+          "text":     {"type": "string"},
+          "status":   {"type": "string", "enum": ["pass", "fail", "partial"]},
+          "evidence": {"type": "string"},
+          "notes":    {"type": "string"}
+        }
+      }
+    },
+    "drift": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "undocumentedAdditions": {"type": "array", "items": {"type": "string"}},
+        "missingFromImpl":       {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}
