@@ -18,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
 )
 
 // ChangesDirName is the conventional path (relative to repo root) where
@@ -30,11 +29,11 @@ var ErrChangeNotFound = errors.New("change not found")
 
 // Meta mirrors meta.json written by the Arceus CLI.
 type Meta struct {
-	ID        string    `json:"id"`
-	Title     string    `json:"title"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Status    string `json:"status"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // Task is one checkbox item in tasks.md.
